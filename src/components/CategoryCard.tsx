@@ -21,8 +21,12 @@ export function CategoryCard({ category, count, onPress }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    flex: 1,
-    margin: 6,
+    // flexBasis 46% + margin 2% = ~50% par carte = grille 2 colonnes
+    // Remplace flex:1 qui ne wrap pas correctement sur web
+    flexBasis: '46%',
+    flexGrow: 0,
+    flexShrink: 0,
+    margin: '2%',
     backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
     padding: 16,
