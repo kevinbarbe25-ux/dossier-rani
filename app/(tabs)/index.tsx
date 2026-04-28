@@ -10,7 +10,7 @@ import { CategoryCard } from '../../src/components/CategoryCard';
 import { ProcedureCard } from '../../src/components/ProcedureCard';
 import { SearchBar } from '../../src/components/SearchBar';
 import { useSearch } from '../../src/hooks/useSearch';
-import { COLORS, RADIUS } from '../../src/theme';
+import { COLORS, RADIUS, FONTS } from '../../src/theme';
 import { Category } from '../../src/types';
 
 const AI_TOOLS = [
@@ -149,9 +149,9 @@ const styles = StyleSheet.create({
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14 },
   logoDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: COLORS.accent },
-  logoName: { fontSize: 14, fontWeight: '700', color: COLORS.text, letterSpacing: 0.2 },
-  heroHeading: { fontSize: 32, fontWeight: '900', color: '#0D0D0D', lineHeight: 36, letterSpacing: -0.8 },
-  heroAccent: { color: COLORS.accent },
+  logoName: { fontSize: 14, fontFamily: FONTS.bold, color: COLORS.text, letterSpacing: 0.2 },
+  heroHeading: { fontSize: 32, fontFamily: FONTS.extrabold, color: '#0D0D0D', lineHeight: 36, letterSpacing: -0.8 },
+  heroAccent: { color: COLORS.accent, fontFamily: FONTS.extrabold },
 
   scroll: { paddingBottom: 32 },
   list:   { paddingBottom: 32 },

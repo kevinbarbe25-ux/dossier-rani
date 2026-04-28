@@ -25,3 +25,10 @@ export const RADIUS = {
   lg: 16,
   xl: 24,
 };
+
+export const FONTS = {
+  regular:   'PlusJakartaSans_400Regular',
+  semibold:  'PlusJakartaSans_600SemiBold',
+  bold:      'PlusJakartaSans_700Bold',
+  extrabold: 'PlusJakartaSans_800ExtraBold',
+};
