@@ -1,0 +1,7 @@
+name = "dossier-rani-ai"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Après deploy, ajouter la clé via :
+# wrangler secret put OPENROUTER_API_KEY
+# (ne jamais mettre la clé dans ce fichier)
