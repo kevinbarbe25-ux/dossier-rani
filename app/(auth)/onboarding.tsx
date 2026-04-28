@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   sloganAccent:{ fontSize: 34, fontWeight: '900', color: COLORS.accent, textAlign: 'center', lineHeight: 40, letterSpacing: -0.8 },
   subtitle:    { marginTop: 14, fontSize: 15, color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 22 },
 
-  actions: { gap: 12 },
+  actions: { gap: 12, maxWidth: 440, width: '100%', alignSelf: 'center' },
 
   btnPrimary: {
     backgroundColor: COLORS.accent,
