@@ -5,6 +5,7 @@ import {
   Modal, Pressable, Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Stack } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -218,6 +219,7 @@ export default function ProcedureScreen() {
 
   return (
     <View style={styles.screen}>
+      <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
       {/* Header */}
