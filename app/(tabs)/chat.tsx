@@ -1,13 +1,21 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Keyboard,
+  Keyboard, StatusBar,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  FadeInLeft,
+  FadeInRight,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { sendChatMessage, ChatMessage } from '../../src/services/ai';
-import { COLORS, RADIUS } from '../../src/theme';
+import { TypingIndicator } from '../../src/components/TypingIndicator';
+import { COLORS, RADIUS, FONTS } from '../../src/theme';
 
 const WELCOME: ChatMessage = {
   role: 'assistant',
@@ -21,7 +29,44 @@ const STARTERS = [
   "Comment ouvrir un compte sans revenus fixes ?",
 ];
 
-type Message = ChatMessage & { id: string };
+type Message = ChatMessage & { id: string; streaming?: boolean };
+
+function StreamingText({ text }: { text: string }) {
+  const [displayed, setDisplayed] = useState('');
+
+  useEffect(() => {
+    setDisplayed('');
+    let i = 0;
+    const interval = setInterval(() => {
+      i += 2;
+      setDisplayed(text.slice(0, i));
+      if (i >= text.length) clearInterval(interval);
+    }, 12);
+    return () => clearInterval(interval);
+  }, [text]);
+
+  return <Text style={styles.bubbleTextBot}>{displayed || ' '}</Text>;
+}
+
+function ChatBubble({ message }: { message: Message }) {
+  const isUser = message.role === 'user';
+
+  return (
+    <Animated.View
+      entering={isUser ? FadeInRight.duration(280).springify() : FadeInLeft.duration(280).springify()}
+      style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleBot]}
+    >
+      {!isUser && <Text style={styles.botName}>RANI</Text>}
+      {!isUser && message.streaming ? (
+        <StreamingText text={message.content} />
+      ) : (
+        <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextBot]}>
+          {message.content}
+        </Text>
+      )}
+    </Animated.View>
+  );
+}
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([
@@ -31,8 +76,13 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(false);
   const listRef               = useRef<FlatList>(null);
 
+  const sendScale = useSharedValue(1);
+  const sendBtnStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: sendScale.value }],
+  }));
+
   const scrollToEnd = useCallback(() => {
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
   }, []);
 
   const send = useCallback(async (text?: string) => {
@@ -40,7 +90,10 @@ export default function ChatScreen() {
     if (!content || loading) return;
 
     Keyboard.dismiss();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    sendScale.value = withSpring(0.85, { damping: 4 }, () => {
+      sendScale.value = withSpring(1, { damping: 6 });
+    });
     setInput('');
 
     const userMsg: Message = { id: `${Date.now()}-u`, role: 'user', content };
@@ -49,62 +102,67 @@ export default function ChatScreen() {
     scrollToEnd();
 
     try {
-      // Historique sans le message welcome (id='welcome') pour ne pas polluer le contexte
       const history = [...messages.filter(m => m.id !== 'welcome'), userMsg]
         .map(({ role, content }) => ({ role, content }));
 
       const reply = await sendChatMessage(history);
-      const botMsg: Message = { id: `${Date.now()}-a`, role: 'assistant', content: reply };
+      const botMsg: Message = {
+        id: `${Date.now()}-a`,
+        role: 'assistant',
+        content: reply,
+        streaming: true,
+      };
       setMessages(prev => [...prev, botMsg]);
+
+      // Remove streaming flag after text finishes
+      setTimeout(() => {
+        setMessages(prev =>
+          prev.map(m => m.id === botMsg.id ? { ...m, streaming: false } : m)
+        );
+      }, reply.length * 12 + 200);
+
     } catch {
-      const errMsg: Message = {
+      setMessages(prev => [...prev, {
         id: `${Date.now()}-err`,
         role: 'assistant',
         content: "⚠️ Service indisponible. Vérifie ta connexion et réessaie.",
-      };
-      setMessages(prev => [...prev, errMsg]);
+      }]);
     } finally {
       setLoading(false);
       scrollToEnd();
     }
   }, [input, loading, messages, scrollToEnd]);
 
-  const renderItem = useCallback(({ item }: { item: Message }) => {
-    const isUser = item.role === 'user';
-    return (
-      <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleBot]}>
-        {!isUser && <Text style={styles.botName}>Rani</Text>}
-        <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextBot]}>
-          {item.content}
-        </Text>
-      </View>
-    );
-  }, []);
+  const canSend = input.trim().length > 0 && !loading;
 
   return (
-    <>
-      <Stack.Screen options={{ title: 'Rani — Assistant' }} />
+    <View style={styles.screen}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <SafeAreaView style={styles.headerSafe} edges={['top']}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View style={styles.raniDot} />
+            <View>
+              <Text style={styles.headerTitle}>Rani IA</Text>
+              <Text style={styles.headerSub}>Assistant administratif marocain</Text>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+
       <KeyboardAvoidingView
-        style={styles.container}
+        style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={88}
+        keyboardVerticalOffset={0}
       >
         <FlatList
           ref={listRef}
           data={messages}
           keyExtractor={m => m.id}
-          renderItem={renderItem}
+          renderItem={({ item }) => <ChatBubble message={item} />}
           contentContainerStyle={styles.list}
           onContentSizeChange={scrollToEnd}
           showsVerticalScrollIndicator={false}
-          ListFooterComponent={
-            loading ? (
-              <View style={styles.typingBubble}>
-                <ActivityIndicator size="small" color={COLORS.accent} />
-                <Text style={styles.typingText}>Rani répond…</Text>
-              </View>
-            ) : null
-          }
           ListHeaderComponent={
             messages.length === 1 ? (
               <View style={styles.starters}>
@@ -121,6 +179,13 @@ export default function ChatScreen() {
               </View>
             ) : null
           }
+          ListFooterComponent={
+            loading ? (
+              <View style={styles.typingWrap}>
+                <TypingIndicator />
+              </View>
+            ) : null
+          }
         />
 
         {/* Input bar */}
@@ -129,43 +194,82 @@ export default function ChatScreen() {
             style={styles.input}
             value={input}
             onChangeText={setInput}
-            placeholder="Ta question…"
+            placeholder="Pose ta question…"
             placeholderTextColor={COLORS.textMuted}
-            accessibilityLabel="Message à envoyer à Rani"
             multiline
             maxLength={500}
             returnKeyType="send"
             onSubmitEditing={() => send()}
           />
           <TouchableOpacity
-            style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
             onPress={() => send()}
-            disabled={!input.trim() || loading}
-            activeOpacity={0.8}
+            disabled={!canSend}
+            activeOpacity={1}
           >
-            <Text style={styles.sendBtnText}>↑</Text>
+            <Animated.View style={[styles.sendBtn, !canSend && styles.sendBtnOff, sendBtnStyle]}>
+              <Text style={styles.sendIcon}>↑</Text>
+            </Animated.View>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  screen:     { flex: 1, backgroundColor: COLORS.background },
+  flex:       { flex: 1 },
+  headerSafe: { backgroundColor: COLORS.primary },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 14,
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  raniDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#4ADE80',
+    shadowColor: '#4ADE80',
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: FONTS.bold,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  headerSub: {
+    fontSize: 12,
+    fontFamily: FONTS.regular,
+    color: 'rgba(255,255,255,0.6)',
+  },
 
   list: { padding: 16, paddingBottom: 8 },
 
   starters: { marginBottom: 16, gap: 8 },
   starterChip: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: RADIUS.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#E8E4DC',
   },
-  starterText: { fontSize: 13, color: COLORS.textSub },
+  starterText: {
+    fontSize: 13,
+    fontFamily: FONTS.regular,
+    color: COLORS.textSub,
+  },
+
+  typingWrap: { paddingLeft: 4, marginBottom: 4 },
 
   bubble: {
     maxWidth: '82%',
@@ -179,48 +283,38 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   bubbleBot: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#FFFFFF',
     alignSelf: 'flex-start',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#E8E4DC',
   },
   botName: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 9,
+    fontFamily: FONTS.bold,
     color: COLORS.accent,
-    marginBottom: 4,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    marginBottom: 5,
+    letterSpacing: 1,
   },
   bubbleText: { fontSize: 14, lineHeight: 21 },
-  bubbleTextUser: { color: '#fff' },
-  bubbleTextBot: { color: COLORS.text },
-
-  typingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.surface,
-    alignSelf: 'flex-start',
-    borderRadius: RADIUS.lg,
-    borderBottomLeftRadius: 4,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  bubbleTextUser: {
+    color: '#FFFFFF',
+    fontFamily: FONTS.regular,
   },
-  typingText: { fontSize: 13, color: COLORS.textMuted },
+  bubbleTextBot: {
+    color: COLORS.text,
+    fontFamily: FONTS.regular,
+  },
 
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
     padding: 12,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
-    backgroundColor: COLORS.surface,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 14,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: '#E8E4DC',
   },
   input: {
     flex: 1,
@@ -229,10 +323,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 15,
+    fontFamily: FONTS.regular,
     color: COLORS.text,
     maxHeight: 120,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: '#E8E4DC',
   },
   sendBtn: {
     width: 42,
@@ -242,6 +337,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendBtnDisabled: { opacity: 0.35 },
-  sendBtnText: { color: '#fff', fontSize: 20, fontWeight: '700', marginBottom: 2 },
+  sendBtnOff: { opacity: 0.3 },
+  sendIcon: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontFamily: FONTS.bold,
+    marginBottom: 2,
+  },
 });

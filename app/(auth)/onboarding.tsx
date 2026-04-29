@@ -1,35 +1,66 @@
-import React, { useEffect, useRef } from 'react';
-import {
-  View, Text, TouchableOpacity, StyleSheet,
-  Animated, Linking, SafeAreaView, StatusBar,
-} from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Linking, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+  withSequence,
+} from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
-import { COLORS, RADIUS } from '../../src/theme';
+import { COLORS, RADIUS, FONTS } from '../../src/theme';
 
 const WHATSAPP_MSG = encodeURIComponent(
-  'Découvre Dossier Rani 🗂️ — l\'app pour tes démarches administratives marocaines, avec checklist offline et assistant IA. https://github.com/kevinbarbe25-ux/dossier-rani'
+  "Découvre Dossier Rani 🗂️ — l'app pour tes démarches administratives marocaines, checklist offline + assistant IA. https://dossier-rani.pages.dev"
 );
 
 export default function OnboardingScreen() {
   const router              = useRouter();
   const { continueAsGuest } = useAuth();
 
-  const logoScale   = useRef(new Animated.Value(0.6)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
-  const btnOpacity  = useRef(new Animated.Value(0)).current;
+  // Logo
+  const logoScale   = useSharedValue(0.5);
+  const logoOpacity = useSharedValue(0);
+
+  // Slogan
+  const sloganY       = useSharedValue(24);
+  const sloganOpacity = useSharedValue(0);
+
+  // Buttons
+  const btnY       = useSharedValue(40);
+  const btnOpacity = useSharedValue(0);
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.parallel([
-        Animated.spring(logoScale,   { toValue: 1, friction: 5, useNativeDriver: true }),
-        Animated.timing(logoOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-      ]),
-      Animated.timing(textOpacity, { toValue: 1, duration: 400, delay: 100, useNativeDriver: true }),
-      Animated.timing(btnOpacity,  { toValue: 1, duration: 400, useNativeDriver: true }),
-    ]).start();
+    // Logo spring
+    logoScale.value   = withSpring(1, { damping: 8, stiffness: 100 });
+    logoOpacity.value = withTiming(1, { duration: 500 });
+
+    // Slogan after 400ms
+    sloganOpacity.value = withDelay(400, withTiming(1, { duration: 500 }));
+    sloganY.value       = withDelay(400, withSpring(0, { damping: 12, stiffness: 100 }));
+
+    // Buttons after 800ms
+    btnOpacity.value = withDelay(800, withTiming(1, { duration: 400 }));
+    btnY.value       = withDelay(800, withSpring(0, { damping: 12, stiffness: 120 }));
   }, []);
+
+  const logoStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: logoScale.value }],
+    opacity: logoOpacity.value,
+  }));
+
+  const sloganStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sloganY.value }],
+    opacity: sloganOpacity.value,
+  }));
+
+  const btnStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: btnY.value }],
+    opacity: btnOpacity.value,
+  }));
 
   const handleGuest = () => {
     continueAsGuest();
@@ -43,18 +74,20 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       <View style={styles.container}>
 
-        {/* Logo animé */}
-        <View style={styles.heroSection}>
-          <Animated.View style={[styles.logoWrap, { transform: [{ scale: logoScale }], opacity: logoOpacity }]}>
-            <Text style={styles.logoEmoji}>🗂️</Text>
+        {/* Hero */}
+        <View style={styles.hero}>
+          <Animated.View style={[styles.logoWrap, logoStyle]}>
+            <View style={styles.logoCircle}>
+              <Text style={styles.logoEmoji}>🗂️</Text>
+            </View>
             <Text style={styles.logoName}>Dossier Rani</Text>
           </Animated.View>
 
-          <Animated.View style={{ opacity: textOpacity }}>
+          <Animated.View style={[styles.sloganWrap, sloganStyle]}>
             <Text style={styles.slogan}>La première fois,</Text>
             <Text style={styles.sloganAccent}>c'est la bonne.</Text>
             <Text style={styles.subtitle}>
@@ -63,8 +96,8 @@ export default function OnboardingScreen() {
           </Animated.View>
         </View>
 
-        {/* Boutons */}
-        <Animated.View style={[styles.actions, { opacity: btnOpacity }]}>
+        {/* Actions */}
+        <Animated.View style={[styles.actions, btnStyle]}>
           <TouchableOpacity
             style={styles.btnPrimary}
             onPress={() => router.push('/(auth)/register')}
@@ -76,17 +109,25 @@ export default function OnboardingScreen() {
           <TouchableOpacity
             style={styles.btnSecondary}
             onPress={() => router.push('/(auth)/register')}
-            activeOpacity={0.7}
+            activeOpacity={0.75}
           >
             <Text style={styles.btnSecondaryText}>J'ai déjà un compte</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.whatsappBtn} onPress={handleWhatsApp} activeOpacity={0.8}>
-            <Text style={styles.whatsappText}>💬 Partager l'app à un ami</Text>
+          <TouchableOpacity
+            style={styles.btnGuest}
+            onPress={handleGuest}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.btnGuestText}>Continuer sans compte →</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.guestBtn} onPress={handleGuest} activeOpacity={0.6}>
-            <Text style={styles.guestText}>Continuer sans compte →</Text>
+          <TouchableOpacity
+            style={styles.whatsappBtn}
+            onPress={handleWhatsApp}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.whatsappText}>💬 Partager à un ami</Text>
           </TouchableOpacity>
         </Animated.View>
 
@@ -96,20 +137,66 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe:       { flex: 1, backgroundColor: COLORS.primary },
-  container:  { flex: 1, paddingHorizontal: 24, justifyContent: 'space-between', paddingBottom: 32 },
+  safe:      { flex: 1, backgroundColor: COLORS.primary },
+  container: {
+    flex: 1,
+    paddingHorizontal: 24,
+    justifyContent: 'space-between',
+    paddingBottom: 16,
+  },
 
-  heroSection: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 28 },
+  hero: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 32,
+  },
 
-  logoWrap:  { alignItems: 'center', gap: 10 },
-  logoEmoji: { fontSize: 72 },
-  logoName:  { fontSize: 28, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
+  logoWrap:   { alignItems: 'center', gap: 14 },
+  logoCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  logoEmoji: { fontSize: 48 },
+  logoName: {
+    fontSize: 26,
+    fontFamily: FONTS.extrabold,
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
 
-  slogan:      { fontSize: 34, fontWeight: '900', color: '#FFFFFF', textAlign: 'center', lineHeight: 40, letterSpacing: -0.8 },
-  sloganAccent:{ fontSize: 34, fontWeight: '900', color: COLORS.accent, textAlign: 'center', lineHeight: 40, letterSpacing: -0.8 },
-  subtitle:    { marginTop: 14, fontSize: 15, color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 22 },
+  sloganWrap: { alignItems: 'center', gap: 4 },
+  slogan: {
+    fontSize: 34,
+    fontFamily: FONTS.extrabold,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 40,
+    letterSpacing: -0.8,
+  },
+  sloganAccent: {
+    fontSize: 34,
+    fontFamily: FONTS.extrabold,
+    color: COLORS.accent,
+    textAlign: 'center',
+    lineHeight: 40,
+    letterSpacing: -0.8,
+  },
+  subtitle: {
+    marginTop: 12,
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.65)',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
 
-  actions: { gap: 12, maxWidth: 440, width: '100%', alignSelf: 'center' },
+  actions: { gap: 10, maxWidth: 440, width: '100%', alignSelf: 'center' },
 
   btnPrimary: {
     backgroundColor: COLORS.accent,
@@ -117,7 +204,12 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
-  btnPrimaryText: { fontSize: 16, fontWeight: '800', color: '#1A1200' },
+  btnPrimaryText: {
+    fontSize: 16,
+    fontFamily: FONTS.extrabold,
+    color: '#1A1200',
+    letterSpacing: 0.2,
+  },
 
   btnSecondary: {
     backgroundColor: 'rgba(255,255,255,0.12)',
@@ -125,18 +217,30 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  btnSecondaryText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+  btnSecondaryText: {
+    fontSize: 15,
+    fontFamily: FONTS.semibold,
+    color: '#FFFFFF',
+  },
+
+  btnGuest:     { paddingVertical: 10, alignItems: 'center' },
+  btnGuestText: {
+    fontSize: 13,
+    fontFamily: FONTS.semibold,
+    color: 'rgba(255,255,255,0.5)',
+  },
 
   whatsappBtn: {
     backgroundColor: '#25D366',
     borderRadius: RADIUS.md,
-    paddingVertical: 13,
+    paddingVertical: 12,
     alignItems: 'center',
   },
-  whatsappText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-
-  guestBtn:  { paddingVertical: 10, alignItems: 'center' },
-  guestText: { fontSize: 13, color: 'rgba(255,255,255,0.55)' },
+  whatsappText: {
+    fontSize: 14,
+    fontFamily: FONTS.bold,
+    color: '#FFFFFF',
+  },
 });

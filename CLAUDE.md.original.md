@@ -1,7 +1,10 @@
 
 ## Skill routing
 
-Request matches skill → invoke via Skill tool. Skills have multi-step workflows, checklists, quality gates. When in doubt, invoke. False positive cheaper than false negative.
+When the user's request matches an available skill, invoke it via the Skill tool. The
+skill has multi-step workflows, checklists, and quality gates that produce better
+results than an ad-hoc answer. When in doubt, invoke the skill. A false positive is
+cheaper than a false negative.
 
 Key routing rules:
 - Product ideas, "is this worth building", brainstorming → invoke /office-hours

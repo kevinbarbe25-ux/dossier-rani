@@ -1,29 +1,64 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View, Text, FlatList, ScrollView, StyleSheet,
-  ActivityIndicator, TouchableOpacity,
+  ActivityIndicator, TouchableOpacity, StatusBar,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withSpring,
+} from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
 import { CATEGORIES } from '../../src/data/categories';
 import { PROCEDURES } from '../../src/data/procedures';
 import { CategoryCard } from '../../src/components/CategoryCard';
 import { ProcedureCard } from '../../src/components/ProcedureCard';
 import { SearchBar } from '../../src/components/SearchBar';
 import { useSearch } from '../../src/hooks/useSearch';
-import { COLORS, RADIUS, FONTS } from '../../src/theme';
+import { useRecentlyViewed } from '../../src/hooks/useRecentlyViewed';
+import { useAuth } from '../../src/context/AuthContext';
+import { COLORS, RADIUS, FONTS, SHADOWS } from '../../src/theme';
 import { Category } from '../../src/types';
 
-const AI_TOOLS = [
-  { emoji: '🧭', label: 'Diagnostic',  route: '/diagnostic'   },
-  { emoji: '💬', label: 'Rani',         route: '/chat'         },
-  { emoji: '✉️', label: 'Courrier',    route: '/letter'       },
-  { emoji: '📷', label: 'Scanner',     route: '/ocr'          },
-  { emoji: '📅', label: 'Rendez-vous', route: '/appointments' },
-];
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12)  return 'Sbah lkhir';
+  return 'Msa lkhir';
+}
+
+function CategoryChip({
+  label, emoji, active, onPress,
+}: { label: string; emoji: string; active: boolean; onPress: () => void }) {
+  const scale = useSharedValue(1);
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  const handlePress = () => {
+    scale.value = withSequence(
+      withSpring(0.88, { damping: 4, stiffness: 400 }),
+      withSpring(1, { damping: 8, stiffness: 300 }),
+    );
+    onPress();
+  };
+
+  return (
+    <TouchableOpacity onPress={handlePress} activeOpacity={1}>
+      <Animated.View style={[styles.chip, active && styles.chipActive, animStyle]}>
+        <Text style={styles.chipEmoji}>{emoji}</Text>
+        <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
 
 export default function HomeScreen() {
-  const router = useRouter();
+  const router   = useRouter();
+  const { user } = useAuth();
   const { query, setQuery, results, aiLoading, isAiSearch } = useSearch();
+  const { recent } = useRecentlyViewed();
+
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
   const countByCategory = useMemo(() => {
     const map: Partial<Record<Category, number>> = {};
@@ -33,165 +68,303 @@ export default function HomeScreen() {
 
   const isSearching = query.trim().length > 0;
 
-  return (
-    <>
-      <Stack.Screen options={{ title: '', headerShown: false }} />
-      <View style={styles.container}>
+  const filteredProcedures = useMemo(() => {
+    if (!selectedCategory) return PROCEDURES;
+    return PROCEDURES.filter(p => p.category === selectedCategory);
+  }, [selectedCategory]);
 
-        {/* Hero */}
-        <View style={styles.hero}>
-          <View style={styles.logoRow}>
-            <View style={styles.logoDot} />
-            <Text style={styles.logoName}>Dossier Rani</Text>
+  const recentProcedures = useMemo(
+    () => recent.map(id => PROCEDURES.find(p => p.id === id)).filter(Boolean) as typeof PROCEDURES,
+    [recent],
+  );
+
+  const greeting = getGreeting();
+  const displayName = user?.email?.split('@')[0] ?? 'frère';
+
+  return (
+    <View style={styles.screen}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+
+      {/* Header vert */}
+      <SafeAreaView style={styles.headerSafe} edges={['top']}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>{greeting} 👋</Text>
+            <Text style={styles.appName}>Dossier Rani</Text>
           </View>
-          <Text style={styles.heroHeading}>
-            {'Tes démarches\n'}
-            <Text style={styles.heroAccent}>marocaines.</Text>
-          </Text>
+          <TouchableOpacity
+            style={styles.avatarBtn}
+            onPress={() => router.push('/(tabs)/profile' as any)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.avatarText}>
+              {displayName.slice(0, 2).toUpperCase()}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Search */}
-        <SearchBar value={query} onChangeText={setQuery} loading={aiLoading} />
+        {/* Slogan */}
+        <Text style={styles.slogan}>La première fois, c'est la bonne.</Text>
 
-        {isSearching ? (
-          /* ── Mode recherche ── */
-          <>
-            <View style={styles.searchMeta}>
-              {aiLoading ? (
-                <View style={styles.aiBadge}>
-                  <ActivityIndicator size={10} color={COLORS.accent} />
-                  <Text style={styles.aiBadgeText}>Recherche IA…</Text>
-                </View>
-              ) : isAiSearch ? (
-                <View style={styles.aiBadge}>
-                  <Text style={styles.aiBadgeText}>✦ Résultats IA</Text>
-                </View>
-              ) : null}
-              <Text style={styles.resultCount}>
-                {results.length} résultat{results.length > 1 ? 's' : ''}
+        {/* Search bar */}
+        <View style={styles.searchWrap}>
+          <SearchBar value={query} onChangeText={setQuery} loading={aiLoading} />
+        </View>
+      </SafeAreaView>
+
+      {isSearching ? (
+        /* Mode recherche */
+        <View style={styles.flex}>
+          <View style={styles.searchMeta}>
+            {aiLoading ? (
+              <View style={styles.aiBadge}>
+                <ActivityIndicator size={10} color={COLORS.accent} />
+                <Text style={styles.aiBadgeText}>Recherche IA…</Text>
+              </View>
+            ) : isAiSearch ? (
+              <View style={styles.aiBadge}>
+                <Text style={styles.aiBadgeText}>✦ Résultats IA</Text>
+              </View>
+            ) : null}
+            <Text style={styles.resultCount}>
+              {results.length} résultat{results.length > 1 ? 's' : ''}
+            </Text>
+          </View>
+          <FlatList
+            data={results}
+            keyExtractor={p => p.id}
+            contentContainerStyle={styles.list}
+            ListEmptyComponent={
+              <Text style={styles.empty}>
+                {aiLoading ? 'Analyse en cours…' : `Aucune démarche pour « ${query} »`}
               </Text>
-            </View>
-
-            <FlatList
-              data={results}
-              keyExtractor={p => p.id}
-              contentContainerStyle={styles.list}
-              ListEmptyComponent={
-                <Text style={styles.empty}>
-                  {aiLoading
-                    ? 'Analyse en cours…'
-                    : `Aucune démarche trouvée pour « ${query} »`}
-                </Text>
-              }
-              renderItem={({ item }) => (
-                <ProcedureCard
-                  procedure={item}
-                  onPress={() => router.push(`/procedure/${item.id}`)}
-                />
-              )}
+            }
+            renderItem={({ item }) => (
+              <ProcedureCard
+                procedure={item}
+                onPress={() => router.push(`/procedure/${item.id}`)}
+              />
+            )}
+          />
+        </View>
+      ) : (
+        /* Mode accueil */
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Catégories scrollables */}
+          <Text style={styles.sectionTitle}>Catégories</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsRow}
+          >
+            <CategoryChip
+              label="Tout"
+              emoji="📋"
+              active={selectedCategory === null}
+              onPress={() => setSelectedCategory(null)}
             />
-          </>
-        ) : (
-          /* ── Mode accueil ── */
-          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-            {/* 1. Catégories — contenu principal */}
-            <Text style={styles.sectionTitle}>Catégories</Text>
-            <View style={styles.grid}>
-              {CATEGORIES.map(cat => (
-                <CategoryCard
-                  key={cat.id}
-                  category={cat}
-                  count={countByCategory[cat.id] ?? 0}
-                  onPress={() => router.push(`/category/${encodeURIComponent(cat.id)}`)}
-                />
-              ))}
-            </View>
-
-            {/* 2. Outils IA — section secondaire en scroll horizontal */}
-            <Text style={styles.sectionTitle}>Outils IA</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.aiToolsRow}
-            >
-              {AI_TOOLS.map(tool => (
-                <TouchableOpacity
-                  key={tool.route}
-                  style={styles.aiChip}
-                  onPress={() => router.push(tool.route as any)}
-                  activeOpacity={0.75}
-                  accessibilityLabel={tool.label}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.aiChipEmoji}>{tool.emoji}</Text>
-                  <Text style={styles.aiChipLabel}>{tool.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <View style={{ height: 40 }} />
+            {CATEGORIES.map(cat => (
+              <CategoryChip
+                key={cat.id}
+                label={cat.label}
+                emoji={cat.emoji}
+                active={selectedCategory === cat.id}
+                onPress={() => setSelectedCategory(
+                  selectedCategory === cat.id ? null : cat.id as Category
+                )}
+              />
+            ))}
           </ScrollView>
-        )}
-      </View>
-    </>
+
+          {/* Récemment consultées */}
+          {recentProcedures.length > 0 && !selectedCategory && (
+            <>
+              <Text style={styles.sectionTitle}>Récemment consultées</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.recentRow}
+              >
+                {recentProcedures.map(p => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={styles.recentCard}
+                    onPress={() => router.push(`/procedure/${p.id}`)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.recentEmoji}>{p.emoji}</Text>
+                    <Text style={styles.recentTitle} numberOfLines={2}>{p.title}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </>
+          )}
+
+          {/* Démarches */}
+          <Text style={styles.sectionTitle}>
+            {selectedCategory
+              ? CATEGORIES.find(c => c.id === selectedCategory)?.label ?? 'Démarches'
+              : 'Toutes les démarches'
+            }
+          </Text>
+          {filteredProcedures.map(p => (
+            <ProcedureCard
+              key={p.id}
+              procedure={p}
+              onPress={() => router.push(`/procedure/${p.id}`)}
+            />
+          ))}
+
+          <View style={{ height: 32 }} />
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  screen: { flex: 1, backgroundColor: COLORS.background },
+  flex:   { flex: 1 },
 
-  hero: {
-    backgroundColor: COLORS.background,
-    paddingTop: 56,
+  headerSafe: { backgroundColor: COLORS.primary },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  greeting: {
+    fontSize: 13,
+    fontFamily: FONTS.semibold,
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 0.2,
+  },
+  appName: {
+    fontSize: 22,
+    fontFamily: FONTS.extrabold,
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  avatarBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  avatarText: {
+    fontSize: 14,
+    fontFamily: FONTS.bold,
+    color: '#FFFFFF',
+  },
+
+  slogan: {
+    fontSize: 13,
+    fontFamily: FONTS.semibold,
+    color: 'rgba(255,255,255,0.55)',
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    fontStyle: 'italic',
+  },
+  searchWrap: {
+    paddingHorizontal: 16,
     paddingBottom: 16,
   },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14 },
-  logoDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: COLORS.accent },
-  logoName: { fontSize: 14, fontFamily: FONTS.bold, color: COLORS.text, letterSpacing: 0.2 },
-  heroHeading: { fontSize: 32, fontFamily: FONTS.extrabold, color: '#0D0D0D', lineHeight: 36, letterSpacing: -0.8 },
-  heroAccent: { color: COLORS.accent, fontFamily: FONTS.extrabold },
+
+  sectionTitle: {
+    fontSize: 11,
+    fontFamily: FONTS.bold,
+    color: COLORS.textMuted,
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+
+  chipsRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 4 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.full,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderWidth: 1.5,
+    borderColor: '#E8E4DC',
+    ...SHADOWS.sm,
+  },
+  chipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  chipEmoji: { fontSize: 16 },
+  chipLabel: {
+    fontSize: 13,
+    fontFamily: FONTS.semibold,
+    color: COLORS.text,
+  },
+  chipLabelActive: { color: '#FFFFFF' },
+
+  recentRow: { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },
+  recentCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.md,
+    padding: 12,
+    alignItems: 'center',
+    width: 90,
+    borderWidth: 1,
+    borderColor: '#E8E4DC',
+    ...SHADOWS.sm,
+  },
+  recentEmoji: { fontSize: 24, marginBottom: 6 },
+  recentTitle: {
+    fontSize: 11,
+    fontFamily: FONTS.semibold,
+    color: COLORS.text,
+    textAlign: 'center',
+    lineHeight: 14,
+  },
 
   scroll: { paddingBottom: 32 },
   list:   { paddingBottom: 32 },
 
-  sectionTitle: {
-    fontSize: 11, fontWeight: '700', color: COLORS.textMuted,
-    letterSpacing: 0.9, textTransform: 'uppercase',
-    marginHorizontal: 16, marginTop: 20, marginBottom: 10,
-  },
-
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10 },
-
-  /* Outils IA — scroll horizontal compact */
-  aiToolsRow: { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },
-  aiChip: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    minWidth: 80,
-  },
-  aiChipEmoji: { fontSize: 22 },
-  aiChipLabel: { fontSize: 12, fontWeight: '700', color: COLORS.text },
-
-  /* Recherche */
   searchMeta: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   aiBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#FFF8EC', borderRadius: 20,
-    paddingHorizontal: 10, paddingVertical: 3,
-    borderWidth: 1, borderColor: '#F0D98A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFF8EC',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#F0D98A',
   },
-  aiBadgeText: { fontSize: 11, fontWeight: '700', color: COLORS.accent },
-  resultCount: { fontSize: 12, color: COLORS.textMuted },
-  empty: { textAlign: 'center', color: COLORS.textMuted, marginTop: 60, fontSize: 15, paddingHorizontal: 32 },
+  aiBadgeText: { fontSize: 11, fontFamily: FONTS.bold, color: COLORS.accent },
+  resultCount:  { fontSize: 12, color: COLORS.textMuted },
+  empty: {
+    textAlign: 'center',
+    color: COLORS.textMuted,
+    marginTop: 60,
+    fontSize: 15,
+    paddingHorizontal: 32,
+  },
 });

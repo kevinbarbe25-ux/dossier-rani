@@ -1,7 +1,13 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
+import { Text, StyleSheet, TouchableOpacity } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withSpring,
+} from 'react-native-reanimated';
 import { CategoryDef } from '../types';
-import { COLORS, RADIUS } from '../theme';
+import { COLORS, RADIUS, FONTS, SHADOWS } from '../theme';
 
 interface Props {
   category: CategoryDef;
@@ -10,41 +16,53 @@ interface Props {
 }
 
 export function CategoryCard({ category, count, onPress }: Props) {
+  const scale = useSharedValue(1);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePress = () => {
+    scale.value = withSequence(
+      withSpring(0.9, { damping: 4, stiffness: 400 }),
+      withSpring(1, { damping: 8, stiffness: 300 }),
+    );
+    onPress();
+  };
+
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
-      <Text style={styles.emoji}>{category.emoji}</Text>
-      <Text style={styles.label} numberOfLines={2}>{category.label}</Text>
-      <Text style={styles.count}>{count} démarche{count > 1 ? 's' : ''}</Text>
+    <TouchableOpacity onPress={handlePress} activeOpacity={1} style={styles.wrapper}>
+      <Animated.View style={[styles.card, animStyle]}>
+        <Text style={styles.emoji}>{category.emoji}</Text>
+        <Text style={styles.label} numberOfLines={2}>{category.label}</Text>
+        <Text style={styles.count}>{count} démarche{count > 1 ? 's' : ''}</Text>
+      </Animated.View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    // flexBasis 46% + margin 2% = ~50% par carte = grille 2 colonnes
-    // Remplace flex:1 qui ne wrap pas correctement sur web
+  wrapper: {
     flexBasis: '46%',
     flexGrow: 0,
     flexShrink: 0,
     margin: '2%',
-    backgroundColor: COLORS.surface,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
     borderRadius: RADIUS.lg,
     padding: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(210,195,175,0.45)',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    borderColor: '#E8E4DC',
     minHeight: 110,
     justifyContent: 'center',
+    ...SHADOWS.md,
   },
   emoji: { fontSize: 28, marginBottom: 6 },
   label: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FONTS.semibold,
     color: COLORS.text,
     textAlign: 'center',
     lineHeight: 16,
@@ -52,7 +70,7 @@ const styles = StyleSheet.create({
   count: {
     marginTop: 4,
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: FONTS.bold,
     color: COLORS.accent,
   },
 });

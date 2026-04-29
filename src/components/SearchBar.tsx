@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, TextInput, StyleSheet, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
-import { COLORS } from '../theme';
+import {
+  View, TextInput, StyleSheet, TouchableOpacity, Text, ActivityIndicator,
+} from 'react-native';
+import { COLORS, FONTS, RADIUS } from '../theme';
 
 interface Props {
   value: string;
@@ -9,7 +11,12 @@ interface Props {
   loading?: boolean;
 }
 
-export function SearchBar({ value, onChangeText, placeholder = 'Rechercher une démarche…', loading = false }: Props) {
+export function SearchBar({
+  value,
+  onChangeText,
+  placeholder = 'Rechercher une démarche…',
+  loading = false,
+}: Props) {
   return (
     <View style={styles.wrapper}>
       {loading
@@ -26,7 +33,7 @@ export function SearchBar({ value, onChangeText, placeholder = 'Rechercher une d
         clearButtonMode="while-editing"
       />
       {value.length > 0 && (
-        <TouchableOpacity onPress={() => onChangeText('')} hitSlop={8}>
+        <TouchableOpacity onPress={() => onChangeText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Text style={styles.clear}>✕</Text>
         </TouchableOpacity>
       )}
@@ -38,25 +45,23 @@ const styles = StyleSheet.create({
   wrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: RADIUS.md,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    marginHorizontal: 16,
-    marginVertical: 4,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderWidth: 0,
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  icon: { fontSize: 16, marginRight: 8 },
-  iconWrap: { marginRight: 8 },
+  icon:    { fontSize: 16, marginRight: 8 },
+  iconWrap:{ marginRight: 8 },
   input: {
     flex: 1,
     fontSize: 15,
+    fontFamily: FONTS.regular,
     color: COLORS.text,
   },
   clear: {
