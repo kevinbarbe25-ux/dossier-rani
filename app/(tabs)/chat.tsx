@@ -1,217 +1,106 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import {
-  View, Text, FlatList, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform,
-  Keyboard, StatusBar,
-} from 'react-native';
+import React from 'react';
+import { View, Text, ScrollView, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, {
-  FadeInLeft,
-  FadeInRight,
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { sendChatMessage, ChatMessage } from '../../src/services/ai';
-import { TypingIndicator } from '../../src/components/TypingIndicator';
-import { COLORS, RADIUS, FONTS } from '../../src/theme';
+import { useRouter } from 'expo-router';
+import { AiToolCard } from '../../src/components/AiToolCard';
+import { COLORS, FONTS, SHADOWS } from '../../src/theme';
 
-const WELCOME: ChatMessage = {
-  role: 'assistant',
-  content: "Salam ! Je suis Rani, ton assistant administratif marocain. Pose-moi n'importe quelle question sur tes démarches — CIN, passeport, carte grise, CNSS, impôts... Je réponds en français ou en darija.",
-};
-
-const STARTERS = [
-  "Comment renouveler ma CIN ?",
-  "Combien coûte un passeport ?",
-  "Wach lazem contrôle technique chaque année ?",
-  "Comment ouvrir un compte sans revenus fixes ?",
+const TOOLS = [
+  {
+    icon: '🤖',
+    title: 'Chat Rani',
+    subtitle: 'Pose n\'importe quelle question sur tes démarches',
+    route: '/rani-chat',
+    featured: true,
+  },
+  {
+    icon: '🧭',
+    title: 'Diagnostic',
+    subtitle: 'Par où commencer ?',
+    route: '/diagnostic',
+  },
+  {
+    icon: '✉️',
+    title: 'Courrier',
+    subtitle: 'Rédige une lettre officielle',
+    route: '/letter',
+  },
+  {
+    icon: '📷',
+    title: 'Scanner',
+    subtitle: 'Lis et analyse ton document',
+    route: '/ocr',
+  },
+  {
+    icon: '📅',
+    title: 'Rendez-vous',
+    subtitle: 'Planifie tes RDV administratifs',
+    route: '/(tabs)/appointments',
+  },
 ];
 
-type Message = ChatMessage & { id: string; streaming?: boolean };
+export default function RaniHubScreen() {
+  const router = useRouter();
 
-function StreamingText({ text }: { text: string }) {
-  const [displayed, setDisplayed] = useState('');
-
-  useEffect(() => {
-    setDisplayed('');
-    let i = 0;
-    const interval = setInterval(() => {
-      i += 2;
-      setDisplayed(text.slice(0, i));
-      if (i >= text.length) clearInterval(interval);
-    }, 12);
-    return () => clearInterval(interval);
-  }, [text]);
-
-  return <Text style={styles.bubbleTextBot}>{displayed || ' '}</Text>;
-}
-
-function ChatBubble({ message }: { message: Message }) {
-  const isUser = message.role === 'user';
-
-  return (
-    <Animated.View
-      entering={isUser ? FadeInRight.duration(280).springify() : FadeInLeft.duration(280).springify()}
-      style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleBot]}
-    >
-      {!isUser && <Text style={styles.botName}>RANI</Text>}
-      {!isUser && message.streaming ? (
-        <StreamingText text={message.content} />
-      ) : (
-        <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextBot]}>
-          {message.content}
-        </Text>
-      )}
-    </Animated.View>
-  );
-}
-
-export default function ChatScreen() {
-  const [messages, setMessages] = useState<Message[]>([
-    { ...WELCOME, id: 'welcome' },
-  ]);
-  const [input, setInput]     = useState('');
-  const [loading, setLoading] = useState(false);
-  const listRef               = useRef<FlatList>(null);
-
-  const sendScale = useSharedValue(1);
-  const sendBtnStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: sendScale.value }],
-  }));
-
-  const scrollToEnd = useCallback(() => {
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
-  }, []);
-
-  const send = useCallback(async (text?: string) => {
-    const content = (text ?? input).trim();
-    if (!content || loading) return;
-
-    Keyboard.dismiss();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    sendScale.value = withSpring(0.85, { damping: 4 }, () => {
-      sendScale.value = withSpring(1, { damping: 6 });
-    });
-    setInput('');
-
-    const userMsg: Message = { id: `${Date.now()}-u`, role: 'user', content };
-    setMessages(prev => [...prev, userMsg]);
-    setLoading(true);
-    scrollToEnd();
-
-    try {
-      const history = [...messages.filter(m => m.id !== 'welcome'), userMsg]
-        .map(({ role, content }) => ({ role, content }));
-
-      const reply = await sendChatMessage(history);
-      const botMsg: Message = {
-        id: `${Date.now()}-a`,
-        role: 'assistant',
-        content: reply,
-        streaming: true,
-      };
-      setMessages(prev => [...prev, botMsg]);
-
-      // Remove streaming flag after text finishes
-      setTimeout(() => {
-        setMessages(prev =>
-          prev.map(m => m.id === botMsg.id ? { ...m, streaming: false } : m)
-        );
-      }, reply.length * 12 + 200);
-
-    } catch {
-      setMessages(prev => [...prev, {
-        id: `${Date.now()}-err`,
-        role: 'assistant',
-        content: "⚠️ Service indisponible. Vérifie ta connexion et réessaie.",
-      }]);
-    } finally {
-      setLoading(false);
-      scrollToEnd();
-    }
-  }, [input, loading, messages, scrollToEnd]);
-
-  const canSend = input.trim().length > 0 && !loading;
+  const featured = TOOLS[0];
+  const grid     = TOOLS.slice(1);
 
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       <SafeAreaView style={styles.headerSafe} edges={['top']}>
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.raniDot} />
-            <View>
-              <Text style={styles.headerTitle}>Rani IA</Text>
-              <Text style={styles.headerSub}>Assistant administratif marocain</Text>
-            </View>
+          <View>
+            <Text style={styles.heading}>Outils IA</Text>
+            <Text style={styles.subheading}>Tous tes outils administratifs</Text>
+          </View>
+          <View style={styles.aiPill}>
+            <Text style={styles.aiPillText}>Powered by Groq</Text>
           </View>
         </View>
       </SafeAreaView>
 
-      <KeyboardAvoidingView
+      <ScrollView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
       >
-        <FlatList
-          ref={listRef}
-          data={messages}
-          keyExtractor={m => m.id}
-          renderItem={({ item }) => <ChatBubble message={item} />}
-          contentContainerStyle={styles.list}
-          onContentSizeChange={scrollToEnd}
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={
-            messages.length === 1 ? (
-              <View style={styles.starters}>
-                {STARTERS.map(s => (
-                  <TouchableOpacity
-                    key={s}
-                    style={styles.starterChip}
-                    onPress={() => send(s)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.starterText}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : null
-          }
-          ListFooterComponent={
-            loading ? (
-              <View style={styles.typingWrap}>
-                <TypingIndicator />
-              </View>
-            ) : null
-          }
-        />
-
-        {/* Input bar */}
-        <View style={styles.inputBar}>
-          <TextInput
-            style={styles.input}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Pose ta question…"
-            placeholderTextColor={COLORS.textMuted}
-            multiline
-            maxLength={500}
-            returnKeyType="send"
-            onSubmitEditing={() => send()}
+        {/* Featured card */}
+        <View style={styles.section}>
+          <AiToolCard
+            icon={featured.icon}
+            title={featured.title}
+            subtitle={featured.subtitle}
+            accentColor={COLORS.accent}
+            onPress={() => router.push(featured.route as any)}
+            featured
           />
-          <TouchableOpacity
-            onPress={() => send()}
-            disabled={!canSend}
-            activeOpacity={1}
-          >
-            <Animated.View style={[styles.sendBtn, !canSend && styles.sendBtnOff, sendBtnStyle]}>
-              <Text style={styles.sendIcon}>↑</Text>
-            </Animated.View>
-          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+
+        {/* 2x2 grid */}
+        <Text style={styles.sectionLabel}>Outils spécialisés</Text>
+        <View style={styles.grid}>
+          {grid.map(tool => (
+            <AiToolCard
+              key={tool.route}
+              icon={tool.icon}
+              title={tool.title}
+              subtitle={tool.subtitle}
+              onPress={() => router.push(tool.route as any)}
+            />
+          ))}
+        </View>
+
+        {/* Info banner */}
+        <View style={styles.infoBanner}>
+          <Text style={styles.infoEmoji}>🔒</Text>
+          <Text style={styles.infoText}>
+            Tes questions ne sont pas stockées. Connexion Groq chiffrée.
+          </Text>
+        </View>
+
+        <View style={{ height: 32 }} />
+      </ScrollView>
     </View>
   );
 }
@@ -226,122 +115,77 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 14,
+    paddingBottom: 16,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  raniDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#4ADE80',
-    shadowColor: '#4ADE80',
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: FONTS.bold,
+  heading: {
+    fontSize: 22,
+    fontFamily: FONTS.extrabold,
     color: '#FFFFFF',
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
   },
-  headerSub: {
-    fontSize: 12,
-    fontFamily: FONTS.regular,
-    color: 'rgba(255,255,255,0.6)',
-  },
-
-  list: { padding: 16, paddingBottom: 8 },
-
-  starters: { marginBottom: 16, gap: 8 },
-  starterChip: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: RADIUS.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E8E4DC',
-  },
-  starterText: {
+  subheading: {
     fontSize: 13,
     fontFamily: FONTS.regular,
-    color: COLORS.textSub,
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 2,
+  },
+  aiPill: {
+    backgroundColor: 'rgba(212,160,23,0.25)',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(212,160,23,0.4)',
+  },
+  aiPillText: {
+    fontSize: 11,
+    fontFamily: FONTS.semibold,
+    color: COLORS.accent,
   },
 
-  typingWrap: { paddingLeft: 4, marginBottom: 4 },
+  scroll: { paddingBottom: 16 },
 
-  bubble: {
-    maxWidth: '82%',
-    borderRadius: RADIUS.lg,
-    padding: 12,
+  section: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+
+  sectionLabel: {
+    fontSize: 11,
+    fontFamily: FONTS.bold,
+    color: COLORS.textMuted,
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    marginHorizontal: 16,
+    marginTop: 20,
     marginBottom: 10,
   },
-  bubbleUser: {
-    backgroundColor: COLORS.primary,
-    alignSelf: 'flex-end',
-    borderBottomRightRadius: 4,
-  },
-  bubbleBot: {
-    backgroundColor: '#FFFFFF',
-    alignSelf: 'flex-start',
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: '#E8E4DC',
-  },
-  botName: {
-    fontSize: 9,
-    fontFamily: FONTS.bold,
-    color: COLORS.accent,
-    marginBottom: 5,
-    letterSpacing: 1,
-  },
-  bubbleText: { fontSize: 14, lineHeight: 21 },
-  bubbleTextUser: {
-    color: '#FFFFFF',
-    fontFamily: FONTS.regular,
-  },
-  bubbleTextBot: {
-    color: COLORS.text,
-    fontFamily: FONTS.regular,
+
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    gap: 8,
   },
 
-  inputBar: {
+  infoBanner: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
-    padding: 12,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 14,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E8E4DC',
-  },
-  input: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
-    fontFamily: FONTS.regular,
-    color: COLORS.text,
-    maxHeight: 120,
-    borderWidth: 1.5,
-    borderColor: '#E8E4DC',
-  },
-  sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: COLORS.primary,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginTop: 20,
+    backgroundColor: '#F0F7F4',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#C8E6D8',
   },
-  sendBtnOff: { opacity: 0.3 },
-  sendIcon: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontFamily: FONTS.bold,
-    marginBottom: 2,
+  infoEmoji: { fontSize: 18 },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: FONTS.regular,
+    color: COLORS.textSub,
+    lineHeight: 17,
   },
 });

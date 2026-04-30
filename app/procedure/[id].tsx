@@ -11,6 +11,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withSpring,
+  withSequence,
   Easing,
 } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -20,7 +21,7 @@ import { ConfettiOverlay } from '../../src/components/ConfettiOverlay';
 import { useChecklist } from '../../src/hooks/useChecklist';
 import { useRecentlyViewed } from '../../src/hooks/useRecentlyViewed';
 import { useFavorites } from '../../src/hooks/useFavorites';
-import { explainDocument } from '../../src/services/ai';
+import { explainDocument, AiLang } from '../../src/services/ai';
 import { ChecklistDocument } from '../../src/types';
 import { COLORS, RADIUS, FONTS, SHADOWS } from '../../src/theme';
 
@@ -31,7 +32,7 @@ function AnimatedProgressBar({ pct }: { pct: number }) {
 
   useEffect(() => {
     width.value = withTiming(pct * 100, {
-      duration: 600,
+      duration: pct === 0 ? 400 : 600,
       easing: Easing.out(Easing.cubic),
     });
   }, [pct]);
@@ -47,6 +48,64 @@ function AnimatedProgressBar({ pct }: { pct: number }) {
   );
 }
 
+// ── Lang Toggle ────────────────────────────────────────────────────────────────
+function LangToggle({ lang, onChange }: { lang: AiLang; onChange: (l: AiLang) => void }) {
+  const indicatorX = useSharedValue(0);
+
+  useEffect(() => {
+    indicatorX.value = withSpring(lang === 'fr' ? 0 : 1, { damping: 14, stiffness: 200 });
+  }, [lang]);
+
+  return (
+    <View style={toggleStyles.container}>
+      {(['fr', 'darija'] as AiLang[]).map((l, i) => {
+        const active = lang === l;
+        return (
+          <TouchableOpacity
+            key={l}
+            onPress={() => onChange(l)}
+            style={[toggleStyles.pill, active && toggleStyles.pillActive]}
+            activeOpacity={0.8}
+          >
+            <Text style={[toggleStyles.pillText, active && toggleStyles.pillTextActive]}>
+              {l === 'fr' ? '🇫🇷 Français' : '🇲🇦 Darija'}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+const toggleStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    backgroundColor: '#F0EDE6',
+    borderRadius: RADIUS.full,
+    padding: 3,
+    marginBottom: 16,
+    gap: 2,
+  },
+  pill: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: RADIUS.full,
+    alignItems: 'center',
+  },
+  pillActive: {
+    backgroundColor: COLORS.primary,
+  },
+  pillText: {
+    fontSize: 12,
+    fontFamily: FONTS.semibold,
+    color: COLORS.textMuted,
+  },
+  pillTextActive: {
+    color: '#FFFFFF',
+  },
+});
+
+// ── Bottom Sheet ───────────────────────────────────────────────────────────────
 interface SheetState {
   visible: boolean;
   doc: ChecklistDocument | null;
@@ -59,20 +118,30 @@ function AiBottomSheet({
   sheet,
   procedureTitle,
   onClose,
+  onRefetch,
 }: {
   sheet: SheetState;
   procedureTitle: string;
   onClose: () => void;
+  onRefetch: (doc: ChecklistDocument, lang: AiLang) => void;
 }) {
   const translateY = useSharedValue(400);
   const bgOpacity  = useSharedValue(0);
+  const [lang, setLang] = useState<AiLang>('fr');
 
   useEffect(() => {
     if (sheet.visible) {
+      setLang('fr');
       translateY.value = withSpring(0, { damping: 18, stiffness: 200 });
       bgOpacity.value  = withTiming(1, { duration: 250 });
     }
-  }, [sheet.visible]);
+  }, [sheet.visible, sheet.doc?.id]);
+
+  const handleLangChange = (newLang: AiLang) => {
+    if (newLang === lang || !sheet.doc) return;
+    setLang(newLang);
+    onRefetch(sheet.doc, newLang);
+  };
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -100,11 +169,15 @@ function AiBottomSheet({
         <Text style={styles.sheetDocName}>{sheet.doc?.label}</Text>
         <Text style={styles.sheetProcedure}>{procedureTitle}</Text>
 
+        <LangToggle lang={lang} onChange={handleLangChange} />
+
         <View style={styles.sheetContent}>
           {sheet.loading && (
             <View style={styles.sheetLoading}>
               <ActivityIndicator size="small" color={COLORS.accent} />
-              <Text style={styles.sheetLoadingText}>Rani explique…</Text>
+              <Text style={styles.sheetLoadingText}>
+                {lang === 'darija' ? 'Khdma…' : 'Rani explique…'}
+              </Text>
             </View>
           )}
           {!sheet.loading && sheet.error && (
@@ -125,6 +198,7 @@ function AiBottomSheet({
   );
 }
 
+// ── Main Screen ────────────────────────────────────────────────────────────────
 export default function ProcedureScreen() {
   const { id }    = useLocalSearchParams<{ id: string }>();
   const router    = useRouter();
@@ -145,6 +219,12 @@ export default function ProcedureScreen() {
     error: false,
   });
 
+  // Shake animation for progress card on reset
+  const shakeX = useSharedValue(0);
+  const shakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shakeX.value }],
+  }));
+
   useEffect(() => {
     if (id) addRecent(id);
   }, [id]);
@@ -158,10 +238,10 @@ export default function ProcedureScreen() {
     prevDone.current = done;
   }, [done, total]);
 
-  const handleExplain = useCallback(async (doc: ChecklistDocument) => {
-    setSheet({ visible: true, doc, explanation: null, loading: true, error: false });
+  const handleExplain = useCallback(async (doc: ChecklistDocument, lang: AiLang = 'fr') => {
+    setSheet(prev => ({ ...prev, visible: true, doc, explanation: null, loading: true, error: false }));
     try {
-      const text = await explainDocument(doc.label, procedure?.title ?? '', 'fr');
+      const text = await explainDocument(doc.label, procedure?.title ?? '', lang);
       setSheet(prev => ({ ...prev, explanation: text, loading: false }));
     } catch {
       setSheet(prev => ({ ...prev, loading: false, error: true }));
@@ -179,7 +259,21 @@ export default function ProcedureScreen() {
       'Effacer toute la progression de cette checklist ?',
       [
         { text: 'Annuler', style: 'cancel' },
-        { text: 'Remettre à zéro', style: 'destructive', onPress: reset },
+        {
+          text: 'Remettre à zéro',
+          style: 'destructive',
+          onPress: () => {
+            reset();
+            // Shake feedback
+            shakeX.value = withSequence(
+              withSpring(-10, { damping: 3, stiffness: 600 }),
+              withSpring(10,  { damping: 3, stiffness: 600 }),
+              withSpring(-6,  { damping: 4, stiffness: 400 }),
+              withSpring(6,   { damping: 4, stiffness: 400 }),
+              withSpring(0,   { damping: 8, stiffness: 300 }),
+            );
+          },
+        },
       ],
     );
   };
@@ -237,7 +331,6 @@ export default function ProcedureScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Category badge */}
         <View style={styles.badgeRow}>
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryBadgeText}>{procedure.category}</Text>
@@ -258,25 +351,27 @@ export default function ProcedureScreen() {
         contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Progress card */}
-        <View style={styles.progressCard}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressLabel}>
-              Documents — <Text style={styles.progressCount}>{done}/{total}</Text>
-            </Text>
-            {done > 0 && (
-              <TouchableOpacity onPress={handleReset}>
-                <Text style={styles.resetBtn}>Réinitialiser</Text>
-              </TouchableOpacity>
+        {/* Progress card — animates on shake */}
+        <Animated.View style={shakeStyle}>
+          <View style={styles.progressCard}>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressLabel}>
+                Documents — <Text style={styles.progressCount}>{done}/{total}</Text>
+              </Text>
+              {done > 0 && (
+                <TouchableOpacity onPress={handleReset}>
+                  <Text style={styles.resetBtn}>Réinitialiser</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <AnimatedProgressBar pct={pct} />
+            {isComplete && (
+              <Text style={styles.completeMsg}>
+                ✅ Dossier complet — wla t-wla! Prêt à déposer.
+              </Text>
             )}
           </View>
-          <AnimatedProgressBar pct={pct} />
-          {isComplete && (
-            <Text style={styles.completeMsg}>
-              ✅ Dossier complet — wla t-wla! Prêt à déposer.
-            </Text>
-          )}
-        </View>
+        </Animated.View>
 
         {/* Checklist */}
         <Text style={styles.sectionTitle}>Checklist documents</Text>
@@ -290,7 +385,6 @@ export default function ProcedureScreen() {
           />
         ))}
 
-        {/* Notes */}
         {procedure.notes && (
           <>
             <Text style={styles.sectionTitle}>À savoir</Text>
@@ -300,7 +394,6 @@ export default function ProcedureScreen() {
           </>
         )}
 
-        {/* Tips */}
         {procedure.tips && procedure.tips.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>Conseils pratiques</Text>
@@ -312,7 +405,6 @@ export default function ProcedureScreen() {
           </>
         )}
 
-        {/* Administrations */}
         {procedure.administrations.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>Administrations</Text>
@@ -327,23 +419,18 @@ export default function ProcedureScreen() {
 
       {/* Fixed WhatsApp button */}
       <View style={[styles.fixedBar, { paddingBottom: insets.bottom + 8 }]}>
-        <TouchableOpacity
-          style={styles.whatsappBtn}
-          onPress={handleWhatsApp}
-          activeOpacity={0.85}
-        >
+        <TouchableOpacity style={styles.whatsappBtn} onPress={handleWhatsApp} activeOpacity={0.85}>
           <Text style={styles.whatsappText}>💬 Partager ma progression</Text>
         </TouchableOpacity>
       </View>
 
-      {/* AI Bottom Sheet */}
       <AiBottomSheet
         sheet={sheet}
         procedureTitle={procedure.title}
         onClose={handleCloseSheet}
+        onRefetch={handleExplain}
       />
 
-      {/* Confetti overlay */}
       <ConfettiOverlay visible={confetti} />
     </View>
   );
@@ -361,26 +448,12 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     gap: 12,
   },
-  backIcon: { padding: 4 },
-  backIconText: {
-    fontSize: 22,
-    color: '#FFFFFF',
-    fontFamily: FONTS.bold,
-  },
-  headerCenter: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerEmoji: { fontSize: 20 },
-  headerTitle: {
-    fontSize: 16,
-    fontFamily: FONTS.bold,
-    color: '#FFFFFF',
-    flex: 1,
-  },
-  favIcon: { padding: 4 },
+  backIcon:     { padding: 4 },
+  backIconText: { fontSize: 22, color: '#FFFFFF', fontFamily: FONTS.bold },
+  headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerEmoji:  { fontSize: 20 },
+  headerTitle:  { fontSize: 16, fontFamily: FONTS.bold, color: '#FFFFFF', flex: 1 },
+  favIcon:      { padding: 4 },
 
   badgeRow: {
     flexDirection: 'row',
@@ -397,22 +470,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
   },
-  categoryBadgeText: {
-    fontSize: 11,
-    fontFamily: FONTS.bold,
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
+  categoryBadgeText: { fontSize: 11, fontFamily: FONTS.bold, color: '#FFFFFF', letterSpacing: 0.3 },
   metaBadge: {
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  metaBadgeText: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.85)',
-  },
+  metaBadgeText: { fontSize: 11, color: 'rgba(255,255,255,0.85)' },
 
   progressCard: {
     backgroundColor: '#FFFFFF',
@@ -430,31 +495,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  progressLabel: {
-    fontSize: 14,
-    fontFamily: FONTS.semibold,
-    color: COLORS.text,
-  },
-  progressCount: {
-    fontFamily: FONTS.bold,
-    color: COLORS.primary,
-  },
-  resetBtn: {
-    fontSize: 13,
-    fontFamily: FONTS.semibold,
-    color: COLORS.danger,
-  },
-  barBg: {
-    height: 8,
-    backgroundColor: '#E8E4DC',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: 8,
-    backgroundColor: COLORS.success,
-    borderRadius: 4,
-  },
+  progressLabel: { fontSize: 14, fontFamily: FONTS.semibold, color: COLORS.text },
+  progressCount: { fontFamily: FONTS.bold, color: COLORS.primary },
+  resetBtn:      { fontSize: 13, fontFamily: FONTS.semibold, color: COLORS.danger },
+  barBg: { height: 8, backgroundColor: '#E8E4DC', borderRadius: 4, overflow: 'hidden' },
+  barFill: { height: 8, backgroundColor: COLORS.success, borderRadius: 4 },
   completeMsg: {
     marginTop: 10,
     fontSize: 14,
@@ -483,27 +528,10 @@ const styles = StyleSheet.create({
     borderColor: '#E8E4DC',
     ...SHADOWS.sm,
   },
-  infoText: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.textSub,
-    lineHeight: 21,
-  },
-  tipText: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.textSub,
-    lineHeight: 22,
-    marginBottom: 4,
-  },
-  adminText: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.textSub,
-    lineHeight: 22,
-  },
+  infoText:   { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textSub, lineHeight: 21 },
+  tipText:    { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textSub, lineHeight: 22, marginBottom: 4 },
+  adminText:  { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textSub, lineHeight: 22 },
 
-  /* Fixed bar */
   fixedBar: {
     position: 'absolute',
     bottom: 0,
@@ -522,13 +550,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...SHADOWS.md,
   },
-  whatsappText: {
-    fontSize: 15,
-    fontFamily: FONTS.bold,
-    color: '#FFFFFF',
-  },
+  whatsappText: { fontSize: 15, fontFamily: FONTS.bold, color: '#FFFFFF' },
 
-  /* Bottom sheet */
+  /* Sheet */
   sheet: {
     position: 'absolute',
     bottom: 0,
@@ -540,7 +564,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingHorizontal: 20,
     paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-    maxHeight: '70%',
+    maxHeight: '75%',
     ...SHADOWS.lg,
   },
   sheetHandle: {
@@ -551,77 +575,23 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 16,
   },
-  sheetDocName: {
-    fontSize: 17,
-    fontFamily: FONTS.bold,
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  sheetProcedure: {
-    fontSize: 13,
-    fontFamily: FONTS.regular,
-    color: COLORS.textMuted,
-    marginBottom: 16,
-  },
-  sheetContent: { minHeight: 80, marginBottom: 16 },
-  sheetLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 20,
-  },
-  sheetLoadingText: {
-    fontSize: 14,
-    fontFamily: FONTS.regular,
-    color: COLORS.textMuted,
-  },
-  sheetError: {
-    fontSize: 13,
-    fontFamily: FONTS.regular,
-    color: COLORS.danger,
-    lineHeight: 20,
-  },
-  sheetExplanation: {
-    fontSize: 15,
-    fontFamily: FONTS.regular,
-    color: COLORS.text,
-    lineHeight: 24,
-  },
+  sheetDocName:  { fontSize: 17, fontFamily: FONTS.bold, color: COLORS.text, marginBottom: 4 },
+  sheetProcedure:{ fontSize: 13, fontFamily: FONTS.regular, color: COLORS.textMuted, marginBottom: 12 },
+  sheetContent:  { minHeight: 80, marginBottom: 16 },
+  sheetLoading:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 20 },
+  sheetLoadingText: { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textMuted },
+  sheetError:    { fontSize: 13, fontFamily: FONTS.regular, color: COLORS.danger, lineHeight: 20 },
+  sheetExplanation: { fontSize: 15, fontFamily: FONTS.regular, color: COLORS.text, lineHeight: 24 },
   sheetCloseBtn: {
     backgroundColor: '#F0EDE6',
     borderRadius: RADIUS.md,
     paddingVertical: 13,
     alignItems: 'center',
   },
-  sheetCloseBtnText: {
-    fontSize: 15,
-    fontFamily: FONTS.semibold,
-    color: COLORS.text,
-  },
+  sheetCloseBtnText: { fontSize: 15, fontFamily: FONTS.semibold, color: COLORS.text },
 
-  /* Error state */
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.background,
-  },
-  notFound: {
-    fontSize: 16,
-    fontFamily: FONTS.semibold,
-    color: COLORS.textMuted,
-    marginBottom: 16,
-  },
-  backBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.md,
-  },
-  backBtnText: {
-    fontSize: 14,
-    fontFamily: FONTS.bold,
-    color: '#FFFFFF',
-  },
+  center:       { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.background },
+  notFound:     { fontSize: 16, fontFamily: FONTS.semibold, color: COLORS.textMuted, marginBottom: 16 },
+  backBtn:      { paddingVertical: 10, paddingHorizontal: 20, backgroundColor: COLORS.primary, borderRadius: RADIUS.md },
+  backBtnText:  { fontSize: 14, fontFamily: FONTS.bold, color: '#FFFFFF' },
 });
-

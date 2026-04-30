@@ -7,6 +7,7 @@ import { Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { analyzeDocument, OcrResult } from '../src/services/ai';
+import { OcrResultActions } from '../src/components/OcrResultActions';
 import { COLORS, RADIUS } from '../src/theme';
 
 const DOC_LABELS: Record<string, string> = {
@@ -204,9 +205,17 @@ export default function OcrScreen() {
               </View>
             )}
 
-            <TouchableOpacity style={styles.resetBtn} onPress={reset}>
-              <Text style={styles.resetBtnText}>Scanner un autre document</Text>
-            </TouchableOpacity>
+            {result && !loading && (
+              <OcrResultActions
+                documentType={result.documentType}
+                onReset={reset}
+              />
+            )}
+            {(!result || loading) && (
+              <TouchableOpacity style={styles.resetBtn} onPress={reset}>
+                <Text style={styles.resetBtnText}>Scanner un autre document</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
 

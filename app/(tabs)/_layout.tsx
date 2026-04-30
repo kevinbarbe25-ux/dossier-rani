@@ -12,7 +12,7 @@ export default function TabLayout() {
       <Tabs.Screen name="favorites" options={{ title: 'Favoris' }} />
       <Tabs.Screen name="chat"      options={{ title: 'Rani IA' }} />
       <Tabs.Screen name="profile"      options={{ href: null }} />
-      <Tabs.Screen name="appointments" options={{ href: null }} />
+      <Tabs.Screen name="appointments" options={{ title: 'Rendez-vous' }} />
     </Tabs>
   );
 }

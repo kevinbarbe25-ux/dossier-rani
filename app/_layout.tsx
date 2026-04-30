@@ -57,6 +57,7 @@ function RootNavigator() {
     >
       <Stack.Screen name="(auth)"       options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)"       options={{ headerShown: false }} />
+      <Stack.Screen name="rani-chat"     options={{ headerShown: false }} />
       <Stack.Screen name="diagnostic"   options={{ title: 'Mon diagnostic' }} />
       <Stack.Screen name="letter"       options={{ title: 'Rédiger un courrier' }} />
       <Stack.Screen name="ocr"          options={{ title: 'Scanner un document' }} />
