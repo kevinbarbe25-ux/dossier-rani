@@ -6,7 +6,7 @@ export const COLORS = {
   border:     '#E8E4DC',
   text:       '#1A1A1A',
   textSub:    '#5A5A5A',
-  textMuted:  '#9A9A9A',
+  textMuted:  '#7A7A7A',
   success:    '#2D9C5A',
   danger:     '#D94F4F',
   whatsapp:   '#25D366',

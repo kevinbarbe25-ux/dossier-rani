@@ -42,6 +42,9 @@ function TabButton({
       style={styles.tabBtn}
       onPress={handlePress}
       activeOpacity={1}
+      accessibilityRole="tab"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: focused }}
     >
       <Animated.View style={[styles.tabContent, animStyle]}>
         <Text style={styles.tabIcon}>{icon}</Text>

@@ -7,32 +7,32 @@ import { COLORS, FONTS, SHADOWS } from '../../src/theme';
 
 const TOOLS = [
   {
-    icon: '🤖',
+    icon: 'chatbubble-ellipses-outline' as const,
     title: 'Chat Rani',
     subtitle: 'Pose n\'importe quelle question sur tes démarches',
     route: '/rani-chat',
     featured: true,
   },
   {
-    icon: '🧭',
+    icon: 'compass-outline' as const,
     title: 'Diagnostic',
     subtitle: 'Par où commencer ?',
     route: '/diagnostic',
   },
   {
-    icon: '✉️',
+    icon: 'mail-outline' as const,
     title: 'Courrier',
     subtitle: 'Rédige une lettre officielle',
     route: '/letter',
   },
   {
-    icon: '📷',
+    icon: 'scan-outline' as const,
     title: 'Scanner',
     subtitle: 'Lis et analyse ton document',
     route: '/ocr',
   },
   {
-    icon: '📅',
+    icon: 'calendar-outline' as const,
     title: 'Rendez-vous',
     subtitle: 'Planifie tes RDV administratifs',
     route: '/(tabs)/appointments',

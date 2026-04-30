@@ -87,6 +87,14 @@ export default function ProfileScreen() {
 
         {/* Stats */}
         <Text style={styles.sectionLabel}>Mes stats</Text>
+        {stats.completed === 0 && stats.docsAvoided === 0 && (
+          <View style={styles.statsHint}>
+            <Text style={styles.statsHintEmoji}>🌱</Text>
+            <Text style={styles.statsHintText}>
+              Complète ta première démarche pour voir tes stats.
+            </Text>
+          </View>
+        )}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statNum}>{stats.completed}</Text>
@@ -212,6 +220,26 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
+  statsHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    backgroundColor: '#F0F7F4',
+    borderRadius: RADIUS.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#C8E6D8',
+  },
+  statsHintEmoji: { fontSize: 20 },
+  statsHintText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: FONTS.regular,
+    color: COLORS.textSub,
+    lineHeight: 18,
+  },
   statsRow: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',

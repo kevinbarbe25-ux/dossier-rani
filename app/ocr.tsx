@@ -6,7 +6,7 @@ import {
 import { Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { analyzeDocument, OcrResult } from '../src/services/ai';
+import { analyzeDocument, OcrResult, isTimeoutError } from '../src/services/ai';
 import { OcrResultActions } from '../src/components/OcrResultActions';
 import { COLORS, RADIUS } from '../src/theme';
 
@@ -37,7 +37,7 @@ export default function OcrScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading]   = useState(false);
   const [result, setResult]     = useState<OcrResult | null>(null);
-  const [error, setError]       = useState(false);
+  const [error, setError]       = useState<'timeout' | 'generic' | null>(null);
 
   const pickImage = async (fromCamera: boolean) => {
     const perm = fromCamera
@@ -70,7 +70,7 @@ export default function OcrScreen() {
     const asset = picked.assets[0];
     setImageUri(asset.uri);
     setResult(null);
-    setError(false);
+    setError(null);
 
     if (!asset.base64) {
       Alert.alert('Erreur', 'Impossible de lire l\'image.');
@@ -82,8 +82,8 @@ export default function OcrScreen() {
     try {
       const extracted = await analyzeDocument(asset.base64);
       setResult(extracted);
-    } catch {
-      setError(true);
+    } catch (e) {
+      setError(isTimeoutError(e) ? 'timeout' : 'generic');
     } finally {
       setLoading(false);
     }
@@ -92,7 +92,7 @@ export default function OcrScreen() {
   const reset = () => {
     setImageUri(null);
     setResult(null);
-    setError(false);
+    setError(null);
   };
 
   const days     = result ? daysUntilExpiry(result.dateExpiration) : null;
@@ -196,7 +196,15 @@ export default function OcrScreen() {
               </View>
             )}
 
-            {error && !loading && (
+            {error === 'timeout' && !loading && (
+              <View style={styles.errorCard}>
+                <Text style={styles.errorTitle}>🐌 Connexion lente</Text>
+                <Text style={styles.errorText}>
+                  30 secondes dépassées. Essaie avec une meilleure connexion ou une image plus petite.
+                </Text>
+              </View>
+            )}
+            {error === 'generic' && !loading && (
               <View style={styles.errorCard}>
                 <Text style={styles.errorTitle}>Analyse échouée</Text>
                 <Text style={styles.errorText}>

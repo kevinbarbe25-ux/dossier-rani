@@ -6,12 +6,15 @@ import Animated, {
   withSequence,
   withSpring,
 } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { IaBadge } from './IaBadge';
 import { COLORS, RADIUS, FONTS, SHADOWS } from '../theme';
 
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
 interface Props {
-  icon: string;
+  icon: IoniconName;
   title: string;
   subtitle: string;
   accentColor?: string;
@@ -41,7 +44,13 @@ export function AiToolCard({
     <TouchableOpacity onPress={handlePress} activeOpacity={1} style={featured ? styles.wrapFeatured : styles.wrap}>
       <Animated.View style={[styles.card, featured && styles.cardFeatured, animStyle]}>
         <View style={styles.top}>
-          <Text style={[styles.icon, featured && styles.iconFeatured]}>{icon}</Text>
+          <View style={[styles.iconCircle, featured && styles.iconCircleFeatured]}>
+            <Ionicons
+              name={icon}
+              size={featured ? 26 : 22}
+              color={featured ? COLORS.accent : COLORS.primary}
+            />
+          </View>
           <IaBadge />
         </View>
         <Text style={[styles.title, featured && styles.titleFeatured]}>{title}</Text>
@@ -84,8 +93,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  icon:         { fontSize: 28 },
-  iconFeatured: { fontSize: 36 },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#F0F7F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconCircleFeatured: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
 
   title: {
     fontSize: 14,

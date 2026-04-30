@@ -5,8 +5,8 @@ import {
 } from 'react-native';
 import { Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { generateLetter, LetterType } from '../src/services/ai';
-import { COLORS, RADIUS } from '../src/theme';
+import { generateLetter, LetterType, isTimeoutError } from '../src/services/ai';
+import { COLORS, RADIUS, FONTS } from '../src/theme';
 
 const LETTER_TYPES: { id: LetterType; label: string; emoji: string }[] = [
   { id: 'reclamation', label: 'Réclamation',      emoji: '⚠️' },
@@ -23,7 +23,7 @@ export default function LetterScreen() {
   const [loading, setLoading]     = useState(false);
   const [letter, setLetter]       = useState('');
   const [subject, setSubject]     = useState('');
-  const [error, setError]         = useState(false);
+  const [error, setError]         = useState<'timeout' | 'generic' | null>(null);
 
   const generate = async () => {
     if (!situation.trim() || loading) return;
@@ -31,13 +31,13 @@ export default function LetterScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     setLetter('');
-    setError(false);
+    setError(null);
     try {
       const result = await generateLetter(situation.trim(), letterType, city.trim() || 'Casablanca');
       setLetter(result.letter);
       setSubject(result.subject);
-    } catch {
-      setError(true);
+    } catch (e) {
+      setError(isTimeoutError(e) ? 'timeout' : 'generic');
     } finally {
       setLoading(false);
     }
@@ -144,9 +144,14 @@ export default function LetterScreen() {
               )}
             </TouchableOpacity>
 
-            {error && (
+            {error === 'timeout' && (
               <Text style={styles.errorText}>
-                Service indisponible. Vérifie ta connexion et réessaie.
+                🐌 Connexion lente — 30s dépassées. Réessaie.
+              </Text>
+            )}
+            {error === 'generic' && (
+              <Text style={styles.errorText}>
+                📡 Service indisponible. Vérifie ta connexion.
               </Text>
             )}
           </>
@@ -188,7 +193,7 @@ const styles = StyleSheet.create({
   pageSub: { fontSize: 14, color: COLORS.textSub, marginTop: 4, lineHeight: 20 },
 
   sectionLabel: {
-    fontSize: 11, fontWeight: '700', color: COLORS.textMuted,
+    fontSize: 11, fontFamily: FONTS.bold, color: COLORS.textMuted,
     letterSpacing: 0.8, textTransform: 'uppercase',
     marginHorizontal: 16, marginTop: 20, marginBottom: 10,
   },
@@ -252,7 +257,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   generateBtnDisabled: { opacity: 0.4 },
-  generateBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  generateBtnText: { color: '#fff', fontFamily: FONTS.bold, fontSize: 15 },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 
   errorText: {
@@ -270,7 +275,7 @@ const styles = StyleSheet.create({
     margin: 16,
     marginBottom: 10,
   },
-  subjectLabel: { fontSize: 13, fontWeight: '700', color: COLORS.textMuted },
+  subjectLabel: { fontSize: 13, fontFamily: FONTS.bold, color: COLORS.textMuted },
   subjectText: { fontSize: 13, color: COLORS.text, flex: 1, lineHeight: 18 },
 
   letterCard: {
@@ -301,7 +306,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
   },
-  shareBtnText: { color: '#1A1200', fontWeight: '700', fontSize: 15 },
+  shareBtnText: { color: '#1A1200', fontFamily: FONTS.bold, fontSize: 15 },
 
   resetBtn: { alignItems: 'center', paddingVertical: 16 },
   resetBtnText: { fontSize: 14, color: COLORS.textSub },

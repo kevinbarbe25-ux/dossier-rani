@@ -5,9 +5,9 @@ import {
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { getDiagnostic, DiagnosticResult } from '../src/services/ai';
+import { getDiagnostic, DiagnosticResult, isTimeoutError } from '../src/services/ai';
 import { PROCEDURES } from '../src/data/procedures';
-import { COLORS, RADIUS } from '../src/theme';
+import { COLORS, RADIUS, FONTS } from '../src/theme';
 
 const SUGGESTIONS = [
   "Je veux acheter une voiture d'occasion",
@@ -20,10 +20,11 @@ const SUGGESTIONS = [
 
 export default function DiagnosticScreen() {
   const router = useRouter();
-  const [situation, setSituation] = useState('');
-  const [loading, setLoading]     = useState(false);
-  const [result, setResult]       = useState<DiagnosticResult | null>(null);
-  const [error, setError]         = useState(false);
+  const [situation, setSituation]   = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [result, setResult]         = useState<DiagnosticResult | null>(null);
+  const [error, setError]           = useState<'timeout' | 'generic' | null>(null);
+  const [lastInput, setLastInput]   = useState('');
 
   const analyse = async (text?: string) => {
     const input = (text ?? situation).trim();
@@ -32,12 +33,13 @@ export default function DiagnosticScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     setResult(null);
-    setError(false);
+    setError(null);
+    setLastInput(input);
     try {
       const res = await getDiagnostic(input);
       setResult(res);
-    } catch {
-      setError(true);
+    } catch (e) {
+      setError(isTimeoutError(e) ? 'timeout' : 'generic');
     } finally {
       setLoading(false);
     }
@@ -141,10 +143,22 @@ export default function DiagnosticScreen() {
           </View>
         )}
 
-        {error && (
+        {error === 'timeout' && (
+          <View style={styles.emptyResult}>
+            <Text style={styles.emptyEmoji}>🐌</Text>
+            <Text style={styles.emptyText}>Connexion lente — 30 secondes dépassées.</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={() => analyse(lastInput)}>
+              <Text style={styles.retryBtnText}>Réessayer →</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {error === 'generic' && (
           <View style={styles.emptyResult}>
             <Text style={styles.emptyEmoji}>📡</Text>
-            <Text style={styles.emptyText}>Service IA indisponible. Vérifie ta connexion et réessaie.</Text>
+            <Text style={styles.emptyText}>Service IA indisponible. Vérifie ta connexion.</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={() => analyse(lastInput)}>
+              <Text style={styles.retryBtnText}>Réessayer →</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -208,7 +222,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   analyseBtnDisabled: { opacity: 0.4 },
-  analyseBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  analyseBtnText: { color: '#fff', fontFamily: FONTS.bold, fontSize: 15 },
 
   resultSection: { paddingHorizontal: 16 },
   resultIntro: {
@@ -255,6 +269,14 @@ const styles = StyleSheet.create({
 
   resetBtn: { alignItems: 'center', paddingVertical: 14 },
   resetBtnText: { fontSize: 14, color: COLORS.accent, fontWeight: '600' },
+  retryBtn: {
+    marginTop: 12,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  retryBtnText: { fontSize: 14, color: '#fff', fontFamily: FONTS.bold },
 
   emptyResult: { alignItems: 'center', padding: 32 },
   emptyEmoji: { fontSize: 36, marginBottom: 12 },
@@ -262,7 +284,7 @@ const styles = StyleSheet.create({
 
   suggestionsSection: { paddingHorizontal: 16, marginTop: 8 },
   suggestionsLabel: {
-    fontSize: 11, fontWeight: '700', color: COLORS.textMuted,
+    fontSize: 11, fontFamily: FONTS.bold, color: COLORS.textMuted,
     letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10,
   },
   suggestionChip: {

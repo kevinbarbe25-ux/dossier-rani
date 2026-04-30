@@ -1,5 +1,13 @@
 export const WORKER_URL = 'https://dossier-rani-ai.dossierrani.workers.dev';
 
+export const TIMEOUT_ERROR_MARKER = 'GROQ_TIMEOUT';
+
+export function isTimeoutError(e: unknown): boolean {
+  return e instanceof Error && (
+    e.message.includes('Délai dépassé') || e.message.includes(TIMEOUT_ERROR_MARKER)
+  );
+}
+
 const TIMEOUT_MS = 30_000;
 
 async function workerFetch(body: object): Promise<Response> {

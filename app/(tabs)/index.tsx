@@ -96,6 +96,8 @@ export default function HomeScreen() {
             style={styles.avatarBtn}
             onPress={() => router.push('/(tabs)/profile' as any)}
             activeOpacity={0.8}
+            accessibilityLabel="Mon profil"
+            accessibilityRole="button"
           >
             <Text style={styles.avatarText}>
               {displayName.slice(0, 2).toUpperCase()}
@@ -207,8 +209,8 @@ export default function HomeScreen() {
           {/* Démarches */}
           <Text style={styles.sectionTitle}>
             {selectedCategory
-              ? CATEGORIES.find(c => c.id === selectedCategory)?.label ?? 'Démarches'
-              : 'Toutes les démarches'
+              ? `${CATEGORIES.find(c => c.id === selectedCategory)?.label ?? 'Démarches'} — ${filteredProcedures.length} démarche${filteredProcedures.length > 1 ? 's' : ''}`
+              : `Toutes les démarches — ${PROCEDURES.length}`
             }
           </Text>
           {filteredProcedures.map(p => (
