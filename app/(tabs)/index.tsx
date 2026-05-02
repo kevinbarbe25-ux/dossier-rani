@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, FlatList, ScrollView, StyleSheet,
   ActivityIndicator, TouchableOpacity, StatusBar,
@@ -52,13 +53,28 @@ function CategoryChip({
   );
 }
 
+const FIRST_RUN_KEY = 'dossier_rani_first_run_done';
+
 export default function HomeScreen() {
   const router   = useRouter();
-  const { user } = useAuth();
+  const { user, isGuest, loading } = useAuth();
   const { query, setQuery, results, aiLoading, isAiSearch } = useSearch();
   const { recent } = useRecentlyViewed();
 
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+
+  // First-run: redirect to Diagnostic so new users describe their situation
+  useEffect(() => {
+    if (loading) return; // wait for auth to settle
+    AsyncStorage.getItem(FIRST_RUN_KEY).then(done => {
+      if (!done) {
+        // Set flag BEFORE navigate to prevent re-trigger
+        AsyncStorage.setItem(FIRST_RUN_KEY, 'true').then(() => {
+          router.replace('/diagnostic' as any);
+        });
+      }
+    });
+  }, [loading]);
 
   const countByCategory = useMemo(() => {
     const map: Partial<Record<Category, number>> = {};

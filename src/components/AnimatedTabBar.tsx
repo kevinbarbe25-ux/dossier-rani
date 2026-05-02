@@ -13,10 +13,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../theme';
 
 const TABS = [
-  { name: 'index',     label: 'Accueil',   icon: '🏠' },
-  { name: 'search',    label: 'Recherche', icon: '🔍' },
-  { name: 'favorites', label: 'Favoris',   icon: '⭐' },
-  { name: 'chat',      label: 'Rani IA',   icon: '💬' },
+  { name: 'index',       label: 'Accueil',     icon: '🏠' },
+  { name: 'chat',        label: 'Rani IA',     icon: '🤖' },
+  { name: 'mon-dossier', label: 'Mon Dossier', icon: '📂' },
 ];
 
 function TabButton({
@@ -82,7 +81,8 @@ export function AnimatedTabBar({ state, navigation }: any) {
 
       {TABS.map((tab, i) => {
         const route = state.routes[i];
-        if (!route) return null;
+        // Safety guard: ensure route name matches TABS order
+        if (!route || route.name !== tab.name) return null;
         return (
           <TabButton
             key={tab.name}

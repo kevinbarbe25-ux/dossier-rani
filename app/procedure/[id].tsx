@@ -22,6 +22,7 @@ import { useChecklist } from '../../src/hooks/useChecklist';
 import { useRecentlyViewed } from '../../src/hooks/useRecentlyViewed';
 import { useFavorites } from '../../src/hooks/useFavorites';
 import { explainDocument, AiLang } from '../../src/services/ai';
+import { useExpirations } from '../../src/hooks/useExpirations';
 import { ChecklistDocument } from '../../src/types';
 import { COLORS, RADIUS, FONTS, SHADOWS } from '../../src/theme';
 
@@ -209,6 +210,7 @@ export default function ProcedureScreen() {
   const { checked, toggle, reset, done, total, loaded } = useChecklist(id ?? '', docIds);
   const { addRecent } = useRecentlyViewed();
   const { isFavorite, toggle: toggleFav } = useFavorites();
+  const { addExpiration } = useExpirations();
 
   const [confetti, setConfetti] = useState(false);
   const [sheet, setSheet] = useState<SheetState>({
@@ -231,12 +233,17 @@ export default function ProcedureScreen() {
 
   const prevDone = React.useRef(done);
   useEffect(() => {
-    if (done === total && total > 0 && prevDone.current < total) {
+    // loaded guard prevents double-trigger on mount when done re-derives from AsyncStorage
+    if (done === total && total > 0 && prevDone.current < total && loaded) {
       setConfetti(true);
       setTimeout(() => setConfetti(false), 2400);
+      // Track expiration — idempotent inside the hook
+      if (procedure) {
+        addExpiration(id ?? '', procedure.title);
+      }
     }
     prevDone.current = done;
-  }, [done, total]);
+  }, [done, total, loaded]);
 
   const handleExplain = useCallback(async (doc: ChecklistDocument, lang: AiLang = 'fr') => {
     setSheet(prev => ({ ...prev, visible: true, doc, explanation: null, loading: true, error: false }));
@@ -366,9 +373,27 @@ export default function ProcedureScreen() {
             </View>
             <AnimatedProgressBar pct={pct} />
             {isComplete && (
-              <Text style={styles.completeMsg}>
-                ✅ Dossier complet — wla t-wla! Prêt à déposer.
-              </Text>
+              <>
+                <Text style={styles.completeMsg}>
+                  ✅ Dossier complet — wla t-wla! Prêt à déposer.
+                </Text>
+                <View style={styles.ctaRow}>
+                  <TouchableOpacity
+                    style={styles.ctaBtn}
+                    onPress={() => router.push('/letter' as any)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.ctaBtnText}>✉️ Courrier</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.ctaBtn}
+                    onPress={() => router.push('/(tabs)/appointments' as any)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.ctaBtnText}>📅 RDV</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
             )}
           </View>
         </Animated.View>
@@ -506,6 +531,23 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.semibold,
     color: COLORS.success,
     textAlign: 'center',
+  },
+  ctaRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  ctaBtn: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  ctaBtnText: {
+    fontSize: 13,
+    fontFamily: FONTS.bold,
+    color: '#FFFFFF',
   },
 
   sectionTitle: {
